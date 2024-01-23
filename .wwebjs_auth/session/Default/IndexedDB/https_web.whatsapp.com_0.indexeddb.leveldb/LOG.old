@@ -1,0 +1,12 @@
+2024/01/23-04:23:45.796 3a78 Reusing MANIFEST C:\Users\Bruno\Desktop\ChatbotWhatsapp\WhatsApp-Ai-bot\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2024/01/23-04:23:45.797 3a78 Recovering log #47
+2024/01/23-04:23:45.947 3a78 Reusing old log C:\Users\Bruno\Desktop\ChatbotWhatsapp\WhatsApp-Ai-bot\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000047.log 
+2024/01/23-04:26:23.922 1e94 Level-0 table #53: started
+2024/01/23-04:26:23.973 1e94 Level-0 table #53: 1366420 bytes OK
+2024/01/23-04:26:23.976 1e94 Delete type=0 #47
+2024/01/23-04:26:42.586 3d10 Compacting 1@1 + 1@2 files
+2024/01/23-04:26:42.706 3d10 Generated table #54@1: 45357 keys, 2053695 bytes
+2024/01/23-04:26:42.706 3d10 Compacted 1@1 + 1@2 files => 2053695 bytes
+2024/01/23-04:26:42.707 3d10 compacted to: files[ 0 0 1 0 0 0 0 ]
+2024/01/23-04:26:42.707 3d10 Delete type=2 #50
+2024/01/23-04:26:42.707 3d10 Delete type=2 #53

@@ -1,0 +1,13 @@
+[
+    {
+        "nome": "Crucifixo de Parede",
+        "descricao": "Crucifixo em madeira escura, 30cm.",
+        "preco": "R$ 49,90",
+        "categoria": "Decoração"
+    },
+    {
+        "nome": "Vela de Altar",
+        "descricao": "Vela branca longa, pacote com 10.",
+        "preco": "R$ 29,90",
+        "categoria": "Artigos Litúrgicos"
+    }]

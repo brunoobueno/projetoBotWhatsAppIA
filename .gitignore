@@ -1,0 +1,14 @@
+# dependencies
+/node_modules
+
+# build folder
+/dist
+
+# local env files
+.env
+.env*.local
+
+# local test
+/test
+
+/.wwebjs_cache
