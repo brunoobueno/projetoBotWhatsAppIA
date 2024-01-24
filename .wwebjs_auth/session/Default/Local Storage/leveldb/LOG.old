@@ -1,6 +1,3 @@
-2024/01/23-21:35:25.170 1fb8 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2024/01/23-21:35:25.171 1fb8 Recovering log #3
-2024/01/23-21:35:25.172 1fb8 Reusing old log C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/000003.log 
-2024/01/23-21:37:25.580 3818 Level-0 table #5: started
-2024/01/23-21:37:25.584 3818 Level-0 table #5: 20377 bytes OK
-2024/01/23-21:37:25.586 3818 Delete type=0 #3
+2024/01/24-04:30:31.191 2f68 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2024/01/24-04:30:31.192 2f68 Recovering log #5
+2024/01/24-04:30:31.192 2f68 Reusing old log C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/000005.log 
