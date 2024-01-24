@@ -83,10 +83,18 @@ class WhatsAppClient {
         if (!this.chatHistory.has(senderId)) {
             this.chatHistory.set(senderId, []);
         }
-    
-        // Adicione a mensagem ao histórico
-        this.chatHistory.get(senderId)?.push(msgStr);
+
+        // Obter o histórico atual
+        const currentHistory = this.chatHistory.get(senderId);
         
+
+        // Se o histórico tiver 10 mensagens, remova a mais antiga
+        if (currentHistory && currentHistory.length >= 10) {
+        currentHistory.shift(); // Remove a primeira mensagem
+        }
+
+        // Adicione a nova mensagem ao histórico
+        currentHistory?.push(msgStr);
 
         if (msgStr.length == 0) return;
         
@@ -127,19 +135,22 @@ class WhatsAppClient {
     public async sendMessage(msgStr: string, message: Message, modelName: string) {
         const senderId = message.from;
     
-        // Use um fallback para uma string vazia se não existir histórico
+       // Use um fallback para uma string vazia se não existir histórico
         const history = this.chatHistory.get(senderId) || [];
-        const fullPrompt = `${history.join('\n')}\n${msgStr}`;
+        const historyString = history.join('\n');
+
+        // Adicionando os prefixos
+        const fullPrompt = `Use as informações abaixo para consulta + o seu conhecimento:\n${historyString}\n\nResponda apenas a informação abaixo:\n${msgStr}`;
     
-        // Verifique se o modelo existe e use o fullPrompt
-        if (this.aiModels.get(modelName as AiModels)) {
-            const model: IModelConfig = config.models[modelName as AiModels] as IModelConfig;
-            this.aiModels.get(modelName as AiModels)?.sendMessage(fullPrompt, message);
-        } else {
-            // Se for um modelo personalizado, ainda use o fullPrompt
-            this.customModel.sendMessage({ prompt: fullPrompt, modelName }, message);
-        }
+         // Verifique se o modelo existe e use o fullPrompt
+    if (this.aiModels.get(modelName as AiModels)) {
+        const model: IModelConfig = config.models[modelName as AiModels] as IModelConfig;
+        this.aiModels.get(modelName as AiModels)?.sendMessage(fullPrompt, message);
+    } else {
+        // Se for um modelo personalizado, ainda use o fullPrompt
+        this.customModel.sendMessage({ prompt: fullPrompt, modelName }, message);
     }
+}
 }
 
 export { WhatsAppClient };
