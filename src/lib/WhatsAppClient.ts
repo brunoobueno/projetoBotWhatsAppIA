@@ -3,6 +3,9 @@ import QRCode from 'qrcode-terminal';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+const cron = require('node-cron');
+require('dotenv').config();
+
 
 // config file
 import config from '../whatsapp-ai.config';
@@ -12,10 +15,6 @@ import { AiModels } from '../types/AiModels';
 import { AiModel } from '../models/AiModel';
 
 // extends from base
-import { ChatGptModel } from '../models/ChatGptModel';
-import { StabilityModel } from '../models/StabilityModel';
-import { DalleModel } from '../models/DalleModel';
-import { CustomModel } from '../models/CustomModel';
 import { GeminiModel } from '../models/GeminiModel';
 import { GeminiVisionModel } from '../models/GeminiVisionModel';
 
@@ -29,11 +28,16 @@ import { IModelConfig } from '../types/Config';
 class WhatsAppClient {
     private client;
     private aiModels: Map<AiModels, AiModel<string>>;
-    private customModel: CustomModel;
     private chatHistory: Map<string, string[]> = new Map();
     private productContext: { [key: string]: any } = {}; // Contexto de produto por ID do remetente
+    private paymentContext: { [key: string]: any } = {}; // Contexto de produto por ID do remetente
 
+    
+    // Declaração da propriedade 'context'
+    private context: { [senderId: string]: any };
+    
     public constructor() {
+
         this.client = new Client({
             puppeteer: {
                 args: ['--no-sandbox']
@@ -43,20 +47,25 @@ class WhatsAppClient {
 
         this.aiModels = new Map<AiModels, AiModel<string>>();
         // init models
-        this.aiModels.set('ChatGPT', new ChatGptModel());
-        this.aiModels.set('DALLE', new DalleModel());
-        this.aiModels.set('StableDiffusion', new StabilityModel());
         this.aiModels.set('Gemini', new GeminiModel());
         this.aiModels.set('GeminiVision', new GeminiVisionModel());
+
+        // Inicialização da propriedade 'context'
+        this.context = {};
         
-        this.customModel = new CustomModel();
     }
 
     public initializeClient() {
         this.subscribeEvents();
         this.client.initialize();
+
+        // Limpar o histórico todos os dias à meia-noite
+        cron.schedule('0 0 * * *', () => {
+        this.clearChatHistory();
+    });
     }
 
+    
     private async getJsonInfoFromAPI(apiPath: string): Promise<string> {
         try {
             const response = await axios.get(apiPath);
@@ -65,6 +74,11 @@ class WhatsAppClient {
             console.error('Erro ao acessar a API:', error);
             return '';
         }
+    }
+
+    private clearChatHistory() {
+        this.chatHistory.clear();
+        console.log('Histórico do Chat Apagado!');
     }
 
     private subscribeEvents() {
@@ -88,67 +102,70 @@ class WhatsAppClient {
     }
 
     private async onMessage(message: Message) {
-        const senderId = message.from;
-        const msgStr = message.body;
+    const senderId = message.from;
+    const msgStr = message.body;
 
-        if (!this.chatHistory.has(senderId)) {
-            this.chatHistory.set(senderId, []);
-        }
-        
-        let currentHistory = this.chatHistory.get(senderId);
-        if (!currentHistory) {
-            currentHistory = [];
-            this.chatHistory.set(senderId, currentHistory);
-        }
-
-        if (currentHistory && currentHistory.length >= 10) {
-            currentHistory.shift();
-        }
-
-        currentHistory?.push(msgStr);
-    
-        if (msgStr.length == 0) return;
-
-        // Extraia a palavra-chave e atualize o contexto
-        const jsonInfo = await this.extractKeyword(msgStr, senderId) || 'Não foram encontradas informações relevantes.';
-
-        // Construa o prompt com informações do contexto
-        const fullPrompt = this.constructPromptWithProductContext(senderId, jsonInfo, msgStr);
-    
-        const modelToUse = Util.getModelByPrefix(msgStr) as AiModels;
-
-        if (message.hasMedia) {
-            if (modelToUse === undefined || this.aiModels.get(modelToUse)?.modelType !== "Image") return;
-            const model: IModelConfig = config.models[modelToUse] as IModelConfig;
-            this.aiModels.get(modelToUse)?.sendMessage(msgStr.replace(model.prefix, ''), message);
-            return;
-        }
-
-        if (modelToUse == undefined && !config.enablePrefix.enable) {
-            this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
-            return;
-        }
-
-        if (modelToUse == undefined) return;
-
-        if (this.aiModels.get(modelToUse)) {
-            const model: IModelConfig = config.models[modelToUse] as IModelConfig;
-            this.aiModels.get(modelToUse)?.sendMessage(fullPrompt, message);
-        } else {
-            this.customModel.sendMessage({ prompt: fullPrompt, modelName: modelToUse }, message);
-        }
+    // Verifica se já existe um histórico para o remetente
+    if (!this.chatHistory.has(senderId)) {
+        this.chatHistory.set(senderId, []);
     }
 
-    private async extractKeyword(message: string, senderId: string): Promise<string | null> {
+    let currentHistory = this.chatHistory.get(senderId);
+
+    // Se for a primeira mensagem do usuário, envie a apresentação
+    if (currentHistory && currentHistory.length === 0) {
+        const introMessage = `agora seu nome é Daniele, uma atendente da Alquimia Industria. Responda a pergunta abaixo dizendo seu nome e o lugar que trabalha: ${msgStr}`;
+        const geminiModel = this.aiModels.get('Gemini');
+        if (geminiModel) {
+            geminiModel.sendMessage(introMessage, message);
+            currentHistory.push(introMessage); // Adiciona a mensagem de introdução ao histórico
+            return; // Interrompe o processamento adicional desta mensagem
+        } else {
+            console.error('Modelo Gemini não encontrado');
+        }
+    }
+    
+    if (currentHistory && currentHistory.length >= 10) {
+        currentHistory.shift();
+    }
+    
+    currentHistory?.push(msgStr);
+
+    if (msgStr.length == 0) return;
+
+    
+
+    let fullPrompt = '';
+
+    // Tente extrair informações sobre pagamento
+    let paymentInfo = await this.extractPaymentKeyword(msgStr, senderId);
+    if (paymentInfo) {
+        fullPrompt = this.constructPromptWithPaymentContext(senderId, paymentInfo, msgStr);
+        this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
+    } else {
+        // Tente extrair informações sobre produto
+        let productInfo = await this.extractProductKeyword(msgStr, senderId);
+        if (productInfo) {
+            fullPrompt = this.constructPromptWithProductContext(senderId, productInfo, msgStr);
+            this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
+        } else {
+            // Se nenhuma informação for encontrada, use o simplePrompt
+            fullPrompt = `Responda apenas a informação abaixo:\n${msgStr}`;
+            this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
+        }
+    }
+}
+
+
+    private async extractProductKeyword(message: string, senderId: string): Promise<string | null> {
         const productKeywords = [
             'produto', 'item', 'mercadoria', 'estoque', 'artigo', 
             'categoria', 'modelo', 'marca', 'oferta', 'lançamento', 
             'especificação', 'detalhe'
         ];
-    
         const endpoint = 'http://localhost:3000/produtos';
         const messageLowerCase = message.toLowerCase();
-    
+
         let jsonInfo = null; // Inicialize com null
     
         for (let keyword of productKeywords) {
@@ -161,15 +178,9 @@ class WhatsAppClient {
                 } catch (error) {
                     console.error('Erro ao acessar a API:', error);
                 }
+                
                 break; // Saia do loop assim que encontrar uma correspondência
             }
-        }
-    
-        // Se não houve correspondência com as palavras-chave, use o simplePrompt
-        if (jsonInfo === null) {
-            const history = this.chatHistory.get(senderId) || [];
-            const historyString = history.join('\n');
-            jsonInfo = `Responda apenas a informação abaixo:\n${message}`;
         }
     
         return jsonInfo;
@@ -191,7 +202,52 @@ class WhatsAppClient {
             productPrompt = `Informações do Produto Anterior:\n${this.formatProducts(productInfo)}\n\n`;
         }
     
-        return `Abaixo temos informações do produto para consulta:${productPrompt}Abaixo as informações do Banco de dados para responder essa pergunta:\n${jsonInfo}\n\nPergunta: ${msgStr}`;
+        return `Abaixo temos informações do produto para consulta:${productPrompt} Abaixo as informações do banco: ${jsonInfo}\n\nPergunta: ${msgStr}`;
+    }
+
+    private async extractPaymentKeyword(message: string, senderId: string): Promise<string | null> {
+        const paymentKeywords = [
+            'pagamento', 'pix', 'transferência', 'dados bancários', 
+            'email', 'comprovante', 'contato', 'link de pagamento'
+        ];
+        const endpoint = 'http://localhost:3000/pagamento';
+        const messageLowerCase = message.toLowerCase();
+
+        let jsonInfo = null; // Inicialize com null
+    
+        for (let keyword of paymentKeywords) {
+            if (messageLowerCase.includes(keyword)) {
+                try {
+                    const response = await axios.get(endpoint);
+                    const payments = response.data;
+                    this.paymentContext[senderId] = payments; // Armazena as informações de pagamento
+                    jsonInfo = this.formatPayments(payments); // Formatar os produtos
+                } catch (error) {
+                    console.error('Erro ao acessar a API:', error);
+                }
+                break; // Saia do loop assim que encontrar uma correspondência
+            }
+        }
+    
+        return jsonInfo;
+    }
+
+    private formatPayments(payments: any[]): string {
+        return payments.map(payment => {
+            return `Método de Pagamento: ${payment.metodo_pagamento}\nChave PIX: ${payment.chave_pix}\nDados Bancários: ${payment.dados_bancarios}\nEmail: ${payment.email_comprovante}\nContato: ${payment.contato_comprovante}\nLink de Pagamento: ${payment.link_pagamento}\n`;
+        }).join('\n');
+    }
+
+
+    private constructPromptWithPaymentContext(senderId: string, jsonInfo: string, msgStr: string): string {
+        const paymentInfo = this.paymentContext[senderId];
+        let paymentsPrompt = '';
+    
+        if (paymentInfo) {
+            paymentsPrompt = `Informações dos Métodos de Pagamento Anteriores:\n${this.formatPayments(paymentInfo)}\n\n`;
+        }
+    
+        return `Abaixo temos informações de pagamentos para consulta:${paymentsPrompt} Abaixo as informações do banco: ${jsonInfo}\n\nPergunta: ${msgStr}`;
     }
 
     private async getJsonInfo(jsonPath: string): Promise<string> {
@@ -214,16 +270,16 @@ class WhatsAppClient {
         const senderId = message.from;
         const history = this.chatHistory.get(senderId) || [];
         const historyString = history.join('\n');
-
-        const fullPrompt = `*desconsidere o histórico caso não tenha informação do histórico da conversa. \nAqui tem o histórico da nossa conversa, use apenas para consulta caso precise:\n${historyString}\n\nResponda apenas a informação abaixo:\n${msgStr}`;
     
-        if (this.aiModels.get(modelName as AiModels)) {
-            const model: IModelConfig = config.models[modelName as AiModels] as IModelConfig;
-            this.aiModels.get(modelName as AiModels)?.sendMessage(fullPrompt, message);
+        const fullPrompt = `Responda apenas a informação abaixo:\n${msgStr}`;
+        
+        const model = this.aiModels.get(modelName as AiModels);
+        if (model) {
+            model.sendMessage(fullPrompt, message);
         } else {
-            this.customModel.sendMessage({ prompt: fullPrompt, modelName }, message);
+            console.error('Modelo não encontrado:', modelName);
         }
-    }
+    }    
 }
 
 export { WhatsAppClient };
