@@ -34,7 +34,7 @@ async function executeQuery(sql, values = []) {
 app.get('/produtos', async (req, res) => {
   try {
     // Consulta ao banco de dados para buscar todos os produtos
-    const [rows] = await pool.query('SELECT * FROM produto');
+    const [rows] = await pool.query('SELECT * FROM produtos');
     res.status(200).json(rows); // Retorne os dados dos produtos como JSON
   } catch (error) {
     console.error('Erro ao buscar produtos:', error);
@@ -42,12 +42,24 @@ app.get('/produtos', async (req, res) => {
   }
 });
 
-// Rota para buscar todos os produtos
+// Rota para buscar informações de Pagamento
 app.get('/pagamentos', async (req, res) => {
   try {
-    // Consulta ao banco de dados para buscar todos os produtos
-    const [rows] = await pool.query('SELECT * FROM pagamento');
-    res.status(200).json(rows); // Retorne os dados dos produtos como JSON
+    // Consulta ao banco de dados para buscar informações de Pagamento
+    const [rows] = await pool.query('SELECT * FROM pagamentos');
+    res.status(200).json(rows); // Retorne os dados de pagamento como JSON
+  } catch (error) {
+    console.error('Erro ao buscar produtos:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Rota para buscar informações da Empresa
+app.get('/empresa', async (req, res) => {
+  try {
+    // Consulta ao banco de dados para buscar informações da empresa
+    const [rows] = await pool.query('SELECT * FROM empresa');
+    res.status(200).json(rows); // Retorne os dados da empresa como JSON
   } catch (error) {
     console.error('Erro ao buscar produtos:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });

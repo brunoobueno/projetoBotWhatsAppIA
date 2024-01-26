@@ -1,3 +1,20 @@
-2024/01/26-00:21:13.808 3f10 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2024/01/26-00:21:13.809 3f10 Recovering log #617
-2024/01/26-00:21:13.815 3f10 Reusing old log C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000617.log 
+2024/01/26-01:23:39.573 4334 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2024/01/26-01:23:39.573 4334 Recovering log #617
+2024/01/26-01:23:39.723 4334 Reusing old log C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000617.log 
+2024/01/26-01:26:39.159 42f8 Level-0 table #626: started
+2024/01/26-01:26:39.214 42f8 Level-0 table #626: 1502897 bytes OK
+2024/01/26-01:26:39.215 42f8 Delete type=0 #617
+2024/01/26-01:26:39.711 2b84 Compacting 1@1 + 5@2 files
+2024/01/26-01:26:39.877 2b84 Generated table #627@1: 85911 keys, 2235961 bytes
+2024/01/26-01:26:40.029 2b84 Generated table #628@1: 42168 keys, 2498421 bytes
+2024/01/26-01:26:40.086 2b84 Generated table #629@1: 7561 keys, 2150603 bytes
+2024/01/26-01:26:40.176 2b84 Generated table #630@1: 26126 keys, 2184904 bytes
+2024/01/26-01:26:40.280 2b84 Generated table #631@1: 70215 keys, 1425088 bytes
+2024/01/26-01:26:40.280 2b84 Compacted 1@1 + 5@2 files => 10494977 bytes
+2024/01/26-01:26:40.280 2b84 compacted to: files[ 0 0 5 0 0 0 0 ]
+2024/01/26-01:26:40.281 2b84 Delete type=2 #619
+2024/01/26-01:26:40.281 2b84 Delete type=2 #620
+2024/01/26-01:26:40.281 2b84 Delete type=2 #621
+2024/01/26-01:26:40.281 2b84 Delete type=2 #622
+2024/01/26-01:26:40.281 2b84 Delete type=2 #623
+2024/01/26-01:26:40.281 2b84 Delete type=2 #626

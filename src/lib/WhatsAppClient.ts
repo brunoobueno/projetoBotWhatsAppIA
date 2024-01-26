@@ -3,7 +3,6 @@ import QRCode from 'qrcode-terminal';
 import axios from 'axios';
 const cron = require('node-cron');
 require('dotenv').config();
-import path from 'path';
 
 // config file
 import config from '../whatsapp-ai.config';
@@ -21,9 +20,7 @@ import { Util } from '../util/Util';
 
 // hooks
 import { useSpinner } from '../hooks/useSpinner';
-import { IModelConfig } from '../types/Config';
 
-const { NlpManager }: any = require('node-nlp');
 
 
 class WhatsAppClient {
@@ -57,10 +54,6 @@ class WhatsAppClient {
     }
 
 
-
-
-
-
     public constructor() {
         this.client = new Client({
             puppeteer: {
@@ -72,14 +65,6 @@ class WhatsAppClient {
         this.aiModels = new Map<AiModels, AiModel<string>>();
         this.aiModels.set('Gemini', new GeminiModel());
         this.aiModels.set('GeminiVision', new GeminiVisionModel());
-
-        this.nlpManager = new NlpManager({ languages: ['pt'] });
-        // Carregando o modelo NLP do arquivo
-        const modelPath = path.join(__dirname, 'model.nlp');
-        this.nlpManager.load(modelPath);
-
-
-
 
     }
 
@@ -134,9 +119,9 @@ class WhatsAppClient {
          // Constrói o prompt para o modelo Gemini
     const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
     Se a mensagem estiver relacionada à 'informações de produtos', responda com 'produto'.\n
+    Se a mensagem estiver relacionada a 'Informações sobre a empresa' responda com 'empresa'.\n
     Se a mensagem estiver relacionada à 'troca de produtos ou defeitos', responda com 'troca'.\n
     Se a mensagem tratar de assuntos relacionados à 'pagamento' responda com 'pagamento'.\n
-    Se a mensagem estiver relacionada a 'formas de entrega' responda com 'entrega'.\n
     Se a mensagem não se encaixar em nenhuma dessas categorias, responda com 'default'.\n\n
     mensagem: ${clientMessage}`;
 
@@ -187,6 +172,25 @@ class WhatsAppClient {
                     responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
+                case 'empresa':
+                    // Seção para lidar com a categoria 'pagamento'
+                    let empresaInfo = await this.getJsonInfoFromAPI('http://localhost:3000/empresa');
+                    const keywordsEmpresa = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
+                    const matchingEmpresa = this.searchByKeywords(JSON.parse(empresaInfo), keywordsEmpresa);
+    
+                    if (matchingEmpresa.length > 0) {
+                        // Se houver resultados da pesquisa, crie o prompt com as informações completas
+                        const empresaInfoText = matchingEmpresa.map(empresa => {
+                            // Formate cada objeto como uma string formatada
+                            return `Informações de pagamento:\n${this.formatObjectToString(empresa)}`;
+                        }).join('\n\n');
+    
+                        responsePrompt = `informações:\n${empresaInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
+                    } else {
+                        // Se não houver resultados da pesquisa, use um prompt padrão
+                        responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
+                    }
+                    break;    
             default:
                 // Caso padrão: categoria não reconhecida, use o prompt padrão com a mensagem do cliente
                 responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
@@ -216,12 +220,6 @@ class WhatsAppClient {
             return 'default';
         }
     }
-    
-    
-    
-    
-    
-    
 
     // Função para formatar um objeto como uma string formatada
     private formatObjectToString(obj: Record<string, string>) {
