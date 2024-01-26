@@ -1,11 +1,9 @@
 import { Client, Message, LocalAuth } from 'whatsapp-web.js';
 import QRCode from 'qrcode-terminal';
-import fs from 'fs';
-import path from 'path';
 import axios from 'axios';
 const cron = require('node-cron');
 require('dotenv').config();
-
+import path from 'path';
 
 // config file
 import config from '../whatsapp-ai.config';
@@ -25,19 +23,45 @@ import { Util } from '../util/Util';
 import { useSpinner } from '../hooks/useSpinner';
 import { IModelConfig } from '../types/Config';
 
+const { NlpManager }: any = require('node-nlp');
+
+
 class WhatsAppClient {
     private client;
     private aiModels: Map<AiModels, AiModel<string>>;
     private chatHistory: Map<string, string[]> = new Map();
-    private productContext: { [key: string]: any } = {}; // Contexto de produto por ID do remetente
-    private paymentContext: { [key: string]: any } = {}; // Contexto de produto por ID do remetente
+    private nlpManager: any;
 
-    
-    // Declaração da propriedade 'context'
-    private context: { [senderId: string]: any };
-    
+    private searchByKeywords(data: any[], keywords: string[]): any[] {
+        // Função para remover caracteres especiais e pontuações
+        const removeSpecialChars = (text: string) => {
+            return typeof text === 'string' ? text.replace(/[^\w\s]/gi, '') : text;
+        };
+
+        // Pré-processamento das palavras-chave: minúsculas e remoção de caracteres especiais
+        const processedKeywords = keywords.map(keyword => removeSpecialChars(keyword.toLowerCase()));
+
+        // Filtrar apenas as palavras-chave que têm comprimento significativo
+        const significantKeywords = processedKeywords.filter(keyword => keyword.length > 2);
+
+        return data.filter(item => {
+            // Combine todas as informações do item em uma string para pesquisa, excluindo o 'ID'
+            const itemInfo = Object.entries(item)
+                .filter(([key]) => key.toLowerCase() !== 'id') // Exclui a coluna "ID" da pesquisa
+                .map(([_, value]) => typeof value === 'string' ? removeSpecialChars(value).toLowerCase() : value)
+                .join(' ');
+
+            // Verifique se pelo menos uma das palavras-chave significativas está presente nas informações do item
+            return significantKeywords.some(keyword => itemInfo.includes(keyword));
+        });
+    }
+
+
+
+
+
+
     public constructor() {
-
         this.client = new Client({
             puppeteer: {
                 args: ['--no-sandbox']
@@ -46,26 +70,28 @@ class WhatsAppClient {
         });
 
         this.aiModels = new Map<AiModels, AiModel<string>>();
-        // init models
         this.aiModels.set('Gemini', new GeminiModel());
         this.aiModels.set('GeminiVision', new GeminiVisionModel());
 
-        // Inicialização da propriedade 'context'
-        this.context = {};
-        
+        this.nlpManager = new NlpManager({ languages: ['pt'] });
+        // Carregando o modelo NLP do arquivo
+        const modelPath = path.join(__dirname, 'model.nlp');
+        this.nlpManager.load(modelPath);
+
+
+
+
     }
 
     public initializeClient() {
         this.subscribeEvents();
         this.client.initialize();
 
-        // Limpar o histórico todos os dias à meia-noite
         cron.schedule('0 0 * * *', () => {
-        this.clearChatHistory();
-    });
+            this.clearChatHistory();
+        });
     }
 
-    
     private async getJsonInfoFromAPI(apiPath: string): Promise<string> {
         try {
             const response = await axios.get(apiPath);
@@ -101,185 +127,145 @@ class WhatsAppClient {
         QRCode.generate(qr, { small: true });
     }
 
+    private async classifyAndRespond(message: Message) {
+        // Armazena a mensagem do cliente
+         const clientMessage = message.body;
+    
+         // Constrói o prompt para o modelo Gemini
+    const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
+    Se a mensagem estiver relacionada à 'informações de produtos', responda com 'produto'.\n
+    Se a mensagem estiver relacionada à 'troca de produtos ou defeitos', responda com 'troca'.\n
+    Se a mensagem tratar de assuntos relacionados à 'pagamento' responda com 'pagamento'.\n
+    Se a mensagem estiver relacionada a 'formas de entrega' responda com 'entrega'.\n
+    Se a mensagem não se encaixar em nenhuma dessas categorias, responda com 'default'.\n\n
+    mensagem: ${clientMessage}`;
+
+        // Envia o prompt para o modelo Gemini e recebe a resposta
+         const category = await this.sendPromptToGemini(prompt);
+
+        // Registrar a categoria no console
+        console.log('Categoria detectada:', category);
+
+        let responsePrompt = '';
+
+        switch (category) {
+            case 'produto':
+                // Seção para lidar com a categoria 'produto'
+                let productInfo = await this.getJsonInfoFromAPI('http://localhost:3000/produtos');
+                const keywords = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
+                const matchingProducts = this.searchByKeywords(JSON.parse(productInfo), keywords);
+
+                if (matchingProducts.length > 0) {
+                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
+                    const productInfoText = matchingProducts.map(product => {
+                        // Formate cada objeto como uma string formatada
+                        return `Informações do produto:\n${this.formatObjectToString(product)}`;
+                    }).join('\n\n');
+
+                    responsePrompt = `informações:\n${productInfoText}\n **quando for informação de produto que não esteja acima, significa que não temos no estoque** \n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder,  \n\nMensagem: ${message.body}`;
+                } else {
+                    // Se não houver resultados da pesquisa, use um prompt padrão
+                    responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
+                }
+                break;
+            case 'pagamento':
+                // Seção para lidar com a categoria 'pagamento'
+                let paymentInfo = await this.getJsonInfoFromAPI('http://localhost:3000/pagamentos');
+                const keywordsPayment = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
+                const matchingPayments = this.searchByKeywords(JSON.parse(paymentInfo), keywordsPayment);
+
+                if (matchingPayments.length > 0) {
+                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
+                    const paymentInfoText = matchingPayments.map(payment => {
+                        // Formate cada objeto como uma string formatada
+                        return `Informações de pagamento:\n${this.formatObjectToString(payment)}`;
+                    }).join('\n\n');
+
+                    responsePrompt = `informações:\n${paymentInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
+                } else {
+                    // Se não houver resultados da pesquisa, use um prompt padrão
+                    responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
+                }
+                break;
+            default:
+                // Caso padrão: categoria não reconhecida, use o prompt padrão com a mensagem do cliente
+                responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
+                break;
+        }
+
+        // Enviar a resposta com base no prompt definido
+        this.sendMessage(responsePrompt, message, config.enablePrefix.defaultModel);
+    }    
+
+    private async sendPromptToGemini(prompt: string): Promise<string> {
+        const model = this.aiModels.get('Gemini');
+    
+        if (model && model instanceof GeminiModel) {
+            try {
+                // Chame o método generateResponse com o prompt
+                const response = await model.generateResponse(prompt);
+    
+                // O 'response' deve conter a categoria detectada pelo modelo Gemini
+                return response;
+            } catch (error) {
+                console.error('Erro ao processar o prompt com GeminiModel:', error);
+                return 'default';
+            }
+        } else {
+            console.error('Modelo Gemini não encontrado ou não é do tipo correto');
+            return 'default';
+        }
+    }
+    
+    
+    
+    
+    
+    
+
+    // Função para formatar um objeto como uma string formatada
+    private formatObjectToString(obj: Record<string, string>) {
+        let result = '';
+        for (const key in obj) {
+            if (Object.hasOwnProperty.call(obj, key) && key !== 'id') { // Adicione a condição para ignorar a coluna "ID"
+                result += `${key}: ${obj[key]}\n`;
+            }
+        }
+        return result;
+    }
+
+
+
     private async onMessage(message: Message) {
-    const senderId = message.from;
-    const msgStr = message.body;
+        const senderId = message.from;
 
-    // Verifica se já existe um histórico para o remetente
-    if (!this.chatHistory.has(senderId)) {
-        this.chatHistory.set(senderId, []);
-    }
-
-    let currentHistory = this.chatHistory.get(senderId);
-
-    // Se for a primeira mensagem do usuário, envie a apresentação
-    if (currentHistory && currentHistory.length === 0) {
-        const introMessage = `agora seu nome é Daniele, uma atendente da Alquimia Industria. Responda a pergunta abaixo dizendo seu nome e o lugar que trabalha: ${msgStr}`;
-        const geminiModel = this.aiModels.get('Gemini');
-        if (geminiModel) {
-            geminiModel.sendMessage(introMessage, message);
-            currentHistory.push(introMessage); // Adiciona a mensagem de introdução ao histórico
-            return; // Interrompe o processamento adicional desta mensagem
-        } else {
-            console.error('Modelo Gemini não encontrado');
+        if (!this.chatHistory.has(senderId)) {
+            this.chatHistory.set(senderId, []);
         }
-    }
-    
-    if (currentHistory && currentHistory.length >= 10) {
-        currentHistory.shift();
-    }
-    
-    currentHistory?.push(msgStr);
 
-    if (msgStr.length == 0) return;
-
-    
-
-    let fullPrompt = '';
-
-    // Tente extrair informações sobre pagamento
-    let paymentInfo = await this.extractPaymentKeyword(msgStr, senderId);
-    if (paymentInfo) {
-        fullPrompt = this.constructPromptWithPaymentContext(senderId, paymentInfo, msgStr);
-        this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
-    } else {
-        // Tente extrair informações sobre produto
-        let productInfo = await this.extractProductKeyword(msgStr, senderId);
-        if (productInfo) {
-            fullPrompt = this.constructPromptWithProductContext(senderId, productInfo, msgStr);
-            this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
-        } else {
-            // Se nenhuma informação for encontrada, use o simplePrompt
-            fullPrompt = `Responda apenas a informação abaixo:\n${msgStr}`;
-            this.sendMessage(fullPrompt, message, config.enablePrefix.defaultModel);
+        // Verifique se a mensagem não é da AI
+        if (!message.fromMe) {
+            this.chatHistory.get(senderId)?.push(message.body);
         }
-    }
-}
 
-
-    private async extractProductKeyword(message: string, senderId: string): Promise<string | null> {
-        const productKeywords = [
-            'produto', 'item', 'mercadoria', 'estoque', 'artigo', 
-            'categoria', 'modelo', 'marca', 'oferta', 'lançamento', 
-            'especificação', 'detalhe'
-        ];
-        const endpoint = 'http://localhost:3000/produtos';
-        const messageLowerCase = message.toLowerCase();
-
-        let jsonInfo = null; // Inicialize com null
-    
-        for (let keyword of productKeywords) {
-            if (messageLowerCase.includes(keyword)) {
-                try {
-                    const response = await axios.get(endpoint);
-                    const products = response.data;
-                    this.productContext[senderId] = products; // Armazena as informações do produto
-                    jsonInfo = this.formatProducts(products); // Formatar os produtos
-                } catch (error) {
-                    console.error('Erro ao acessar a API:', error);
-                }
-                
-                break; // Saia do loop assim que encontrar uma correspondência
-            }
-        }
-    
-        return jsonInfo;
-    }
-
-    private formatProducts(products: any[]): string {
-        return products.map(product => {
-            return `Produto: ${product.nome}\nQuantidade: ${product.quantidade}\nPreço: ${product.preco}\nDescrição: ${product.descricao}\n`;
-        }).join('\n');
-    }
-
-    private constructPromptWithProductContext(senderId: string, jsonInfo: string, msgStr: string): string {
-        // Verifique se há informações do produto no contexto do remetente
-        const productInfo = this.productContext[senderId];
-        let productPrompt = '';
-    
-        if (productInfo) {
-            // Se houver informações de produto, inclua no prompt
-            productPrompt = `Informações do Produto Anterior:\n${this.formatProducts(productInfo)}\n\n`;
-        }
-    
-        return `Abaixo temos informações do produto para consulta:${productPrompt} Abaixo as informações do banco: ${jsonInfo}\n\nPergunta: ${msgStr}`;
-    }
-
-    private async extractPaymentKeyword(message: string, senderId: string): Promise<string | null> {
-        const paymentKeywords = [
-            'pagamento', 'pix', 'transferência', 'dados bancários', 
-            'email', 'comprovante', 'contato', 'link de pagamento'
-        ];
-        const endpoint = 'http://localhost:3000/pagamento';
-        const messageLowerCase = message.toLowerCase();
-
-        let jsonInfo = null; // Inicialize com null
-    
-        for (let keyword of paymentKeywords) {
-            if (messageLowerCase.includes(keyword)) {
-                try {
-                    const response = await axios.get(endpoint);
-                    const payments = response.data;
-                    this.paymentContext[senderId] = payments; // Armazena as informações de pagamento
-                    jsonInfo = this.formatPayments(payments); // Formatar os produtos
-                } catch (error) {
-                    console.error('Erro ao acessar a API:', error);
-                }
-                break; // Saia do loop assim que encontrar uma correspondência
-            }
-        }
-    
-        return jsonInfo;
-    }
-
-    private formatPayments(payments: any[]): string {
-        return payments.map(payment => {
-            return `Método de Pagamento: ${payment.metodo_pagamento}\nChave PIX: ${payment.chave_pix}\nDados Bancários: ${payment.dados_bancarios}\nEmail: ${payment.email_comprovante}\nContato: ${payment.contato_comprovante}\nLink de Pagamento: ${payment.link_pagamento}\n`;
-        }).join('\n');
-    }
-
-
-    private constructPromptWithPaymentContext(senderId: string, jsonInfo: string, msgStr: string): string {
-        const paymentInfo = this.paymentContext[senderId];
-        let paymentsPrompt = '';
-    
-        if (paymentInfo) {
-            paymentsPrompt = `Informações dos Métodos de Pagamento Anteriores:\n${this.formatPayments(paymentInfo)}\n\n`;
-        }
-    
-        return `Abaixo temos informações de pagamentos para consulta:${paymentsPrompt} Abaixo as informações do banco: ${jsonInfo}\n\nPergunta: ${msgStr}`;
-    }
-
-    private async getJsonInfo(jsonPath: string): Promise<string> {
-        try {
-            const data = fs.readFileSync(path.resolve(__dirname, jsonPath), 'utf8');
-            return JSON.stringify(JSON.parse(data), null, 2);
-        } catch (err) {
-            console.error(err);
-            return '';
-        }
+        await this.classifyAndRespond(message);
     }
 
     private async onSelfMessage(message: Message) {
-        if (!message.fromMe) return;  
+        if (!message.fromMe) return;
         if (message.hasQuotedMsg && !Util.getModelByPrefix(message.body)) return;
         this.onMessage(message);
     }
 
     public async sendMessage(msgStr: string, message: Message, modelName: string) {
-        const senderId = message.from;
-        const history = this.chatHistory.get(senderId) || [];
-        const historyString = history.join('\n');
-    
-        const fullPrompt = `Responda apenas a informação abaixo:\n${msgStr}`;
-        
         const model = this.aiModels.get(modelName as AiModels);
         if (model) {
-            model.sendMessage(fullPrompt, message);
+            model.sendMessage(msgStr, message);
         } else {
             console.error('Modelo não encontrado:', modelName);
         }
-    }    
+    }
 }
+
 
 export { WhatsAppClient };

@@ -11,6 +11,19 @@ class GeminiModel extends AiModel<string> {
         this.genAI = new GoogleGenerativeAI(this.apiKey);
     }
 
+    async generateResponse(prompt: string): Promise<string> {
+        try {
+            const model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+
+            const result = await model.generateContent(prompt);
+            const res = (await result.response).text();
+
+            return res;
+        } catch (err) {
+            throw err;
+        }
+    }
+
     async sendMessage(prompt: string, msg: Message): Promise<any> {
         const spinner = useSpinner(MessageTemplates.requestStr(this.aiModelName, msg.from, prompt));
         spinner.start();

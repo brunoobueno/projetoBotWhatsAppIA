@@ -21,7 +21,7 @@
       "types": ["node"],
       "allowJs": false
     },
-    "include": ["src/**/*"],
+    "include": ["src/**/*", "nlp.js"],
     "exclude": ["node_modules", "**/*.test.ts"]
 }
   
