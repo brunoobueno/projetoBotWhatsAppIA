@@ -1,9 +1,7 @@
-[0126/012339.261:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'ambient-light-sensor'.", source:  (0)
-[0126/012339.261:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'bluetooth'.", source:  (0)
-[0126/012339.261:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'gamepad'.", source:  (0)
-[0126/012339.262:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'local-fonts'.", source:  (0)
-[0126/012339.262:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'window-management'.", source:  (0)
-[0126/012350.681:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES
-[0126/012350.681:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES
-[0126/012855.804:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES
-[0126/012855.804:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES
+[0126/031948.788:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'ambient-light-sensor'.", source:  (0)
+[0126/031948.788:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'bluetooth'.", source:  (0)
+[0126/031948.788:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'gamepad'.", source:  (0)
+[0126/031948.788:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'local-fonts'.", source:  (0)
+[0126/031948.788:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'window-management'.", source:  (0)
+[0126/032000.534:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES
+[0126/032000.534:ERROR:indexed_db_metadata_coding.cc(201)] IndexedDB Consistency Error: GET_OBJECT_STORES

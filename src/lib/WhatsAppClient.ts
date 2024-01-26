@@ -26,8 +26,10 @@ import { useSpinner } from '../hooks/useSpinner';
 class WhatsAppClient {
     private client;
     private aiModels: Map<AiModels, AiModel<string>>;
-    private chatHistory: Map<string, string[]> = new Map();
-    private nlpManager: any;
+
+
+
+
 
     private searchByKeywords(data: any[], keywords: string[]): any[] {
         // Função para remover caracteres especiais e pontuações
@@ -66,15 +68,13 @@ class WhatsAppClient {
         this.aiModels.set('Gemini', new GeminiModel());
         this.aiModels.set('GeminiVision', new GeminiVisionModel());
 
+
     }
 
     public initializeClient() {
         this.subscribeEvents();
         this.client.initialize();
 
-        cron.schedule('0 0 * * *', () => {
-            this.clearChatHistory();
-        });
     }
 
     private async getJsonInfoFromAPI(apiPath: string): Promise<string> {
@@ -87,10 +87,6 @@ class WhatsAppClient {
         }
     }
 
-    private clearChatHistory() {
-        this.chatHistory.clear();
-        console.log('Histórico do Chat Apagado!');
-    }
 
     private subscribeEvents() {
         const spinner = useSpinner('WhatsApp Client | generating QR Code... \n');
@@ -114,10 +110,10 @@ class WhatsAppClient {
 
     private async classifyAndRespond(message: Message) {
         // Armazena a mensagem do cliente
-         const clientMessage = message.body;
-    
-         // Constrói o prompt para o modelo Gemini
-    const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
+        const clientMessage = message.body;
+
+        // Constrói o prompt para o modelo Gemini
+        const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
     Se a mensagem estiver relacionada à 'informações de produtos', responda com 'produto'.\n
     Se a mensagem estiver relacionada a 'Informações sobre a empresa' responda com 'empresa'.\n
     Se a mensagem estiver relacionada à 'troca de produtos ou defeitos', responda com 'troca'.\n
@@ -126,7 +122,7 @@ class WhatsAppClient {
     mensagem: ${clientMessage}`;
 
         // Envia o prompt para o modelo Gemini e recebe a resposta
-         const category = await this.sendPromptToGemini(prompt);
+        const category = await this.sendPromptToGemini(prompt);
 
         // Registrar a categoria no console
         console.log('Categoria detectada:', category);
@@ -172,25 +168,25 @@ class WhatsAppClient {
                     responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
-                case 'empresa':
-                    // Seção para lidar com a categoria 'pagamento'
-                    let empresaInfo = await this.getJsonInfoFromAPI('http://localhost:3000/empresa');
-                    const keywordsEmpresa = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
-                    const matchingEmpresa = this.searchByKeywords(JSON.parse(empresaInfo), keywordsEmpresa);
-    
-                    if (matchingEmpresa.length > 0) {
-                        // Se houver resultados da pesquisa, crie o prompt com as informações completas
-                        const empresaInfoText = matchingEmpresa.map(empresa => {
-                            // Formate cada objeto como uma string formatada
-                            return `Informações de pagamento:\n${this.formatObjectToString(empresa)}`;
-                        }).join('\n\n');
-    
-                        responsePrompt = `informações:\n${empresaInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
-                    } else {
-                        // Se não houver resultados da pesquisa, use um prompt padrão
-                        responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
-                    }
-                    break;    
+            case 'empresa':
+                // Seção para lidar com a categoria 'pagamento'
+                let empresaInfo = await this.getJsonInfoFromAPI('http://localhost:3000/empresa');
+                const keywordsEmpresa = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
+                const matchingEmpresa = this.searchByKeywords(JSON.parse(empresaInfo), keywordsEmpresa);
+
+                if (matchingEmpresa.length > 0) {
+                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
+                    const empresaInfoText = matchingEmpresa.map(empresa => {
+                        // Formate cada objeto como uma string formatada
+                        return `Informações de pagamento:\n${this.formatObjectToString(empresa)}`;
+                    }).join('\n\n');
+
+                    responsePrompt = `informações:\n${empresaInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
+                } else {
+                    // Se não houver resultados da pesquisa, use um prompt padrão
+                    responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
+                }
+                break;
             default:
                 // Caso padrão: categoria não reconhecida, use o prompt padrão com a mensagem do cliente
                 responsePrompt = `Responda a pergunta abaixo:\n\n${message.body}`;
@@ -199,16 +195,18 @@ class WhatsAppClient {
 
         // Enviar a resposta com base no prompt definido
         this.sendMessage(responsePrompt, message, config.enablePrefix.defaultModel);
-    }    
+    }
+
+
 
     private async sendPromptToGemini(prompt: string): Promise<string> {
         const model = this.aiModels.get('Gemini');
-    
+
         if (model && model instanceof GeminiModel) {
             try {
                 // Chame o método generateResponse com o prompt
                 const response = await model.generateResponse(prompt);
-    
+
                 // O 'response' deve conter a categoria detectada pelo modelo Gemini
                 return response;
             } catch (error) {
@@ -235,17 +233,8 @@ class WhatsAppClient {
 
 
     private async onMessage(message: Message) {
-        const senderId = message.from;
-
-        if (!this.chatHistory.has(senderId)) {
-            this.chatHistory.set(senderId, []);
-        }
-
-        // Verifique se a mensagem não é da AI
-        if (!message.fromMe) {
-            this.chatHistory.get(senderId)?.push(message.body);
-        }
-
+        
+        // Classifique e responda a mensagem
         await this.classifyAndRespond(message);
     }
 
