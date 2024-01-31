@@ -34,20 +34,20 @@ class WhatsAppClient {
     private addToMessageHistory(phoneNumber: string, message: string) {
         // Obtém o histórico existente ou cria um novo array se não existir
         let history = this.messageHistory.get(phoneNumber) || [];
-    
+
         // Adiciona a nova mensagem ao histórico
         history.push(message);
-    
+
         // Limita o histórico a no máximo 2 mensagens
         if (history.length > 2) {
             history = history.slice(-2); // Mantém apenas as últimas duas mensagens
         }
-    
+
         // Se o histórico estava vazio, adicione mensagens padrão
         if (history.length === 1 && history[0] === message) {
             history.unshift('oi', 'olá'); // Adiciona mensagens padrão no início do histórico
         }
-    
+
         // Atualiza o histórico no mapa
         this.messageHistory.set(phoneNumber, history);
     }
@@ -55,7 +55,7 @@ class WhatsAppClient {
     // Adicionando uma fila de execução para as mensagens
     private messageQueue: Message[] = [];
     private isProcessingQueue: boolean = false;
-    
+
     // Função para enfileirar mensagens
     private enqueueMessage(message: Message) {
         this.messageQueue.push(message);
@@ -191,14 +191,15 @@ class WhatsAppClient {
 
         // Constrói o prompt para o modelo Gemini
         const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
-    Se a mensagem estiver relacionada à 'informações de produtos', responda com 'produto'.\n
-    Se a mensagem estiver relacionada a 'Informações sobre a empresa' responda com 'empresa'.\n
-    Se a mensagem tratar de assuntos relacionados somente à 'pagamento' responda com 'pagamento'.\n
-    Se a mensagem tratar de assuntos relacionados somente à 'entrega e envio de produtos' responda com 'entrega'.\n
-    Se a mensagem tratar sobre 'saudação inicial' responda com 'saudacao'.\n
-    Se a mensagem tratar sobre 'promoções, cupons e descontos' responda com 'promocao'.\n
+    Se a mensagem estiver relacionada à 'informações de produto', responda com 'produto'.\n
+    Se a mensagem estiver relacionada a 'Informações sobre a empresa, como numero de telefone ou endereço' responda com 'empresa'.\n
+    Se a mensagem estiver relacionada à 'Informações de pagamento' responda com 'pagamento'.\n
+    Se a mensagem estiver relacionada à 'entrega ou envio de produtos' responda com 'entrega'.\n
+    Se a mensagem estiver relacionada à 'saudação inicial / perguntas sobre quem é você' responda com 'saudacao'.\n
+    Se a mensagem estiver relacionada à 'promoções, cupons e descontos' responda com 'promocao'.\n
     se a mensagem estiver relacioanda à 'informações de troca/garantia/defeitos de produtos', responda com 'troca'.\n
-	Se a mensagem tratar sobre 'frases de despedida' responda com 'default'.\n
+    se a mensagem estiver relacioanda à 'informações para realizar um pedido', responda com 'pedido'.\n
+    Se a mensagem estiver relacioanda à 'frases de despedida' responda com 'default'.\n
     Se a mensagem não se encaixar em nenhuma dessas categorias, responda com 'default'.\n\n
     mensagem: ${clientMessage}`;
 
@@ -215,6 +216,7 @@ class WhatsAppClient {
         //variavel do Contexto
 
         switch (category) {
+
             case 'produto':
                 // Seção para lidar com a categoria 'produto'
                 const productEndpoint = 'http://localhost:3000/produtos';
@@ -235,27 +237,21 @@ class WhatsAppClient {
                     // Atualize userProductInfoMap associado ao número de telefone do usuário
                     this.userProductInfoMap.set(message.from, productInfoText);
 
-                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n  informações adicionais:\n${productInfoText}\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n **quando for informação de produto que não esteja acima, significa que não temos no estoque** \n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, \n\nagora responda: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n\n  informações adicionais:\n\n${productInfoText}\n\n ***se o pruduto não estiver na lista a cima, responda que não trabalhamos com esse produto***\n\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n\n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, **se for mencionar dados acima, realiza uma formatação antes**\n\n agora responda: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
-                    responsePrompt = `*finja que você trabalha na alquimia industria, uma loja de produtos de limpeza (não precisa se apresentar)*\n\n  histórico da conversa: ${JSON.stringify(this.messageHistory.get(message.from))}\n\n informações adicionais sobre produtos anteriores:${this.userProductInfoMap.get(message.from)}\n\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n\n **quando for informação de produto que não esteja acima, responda que não temos no estoque ou peça para especificar qual o produto desejado**\n\n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, \n\nagora responda: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria, uma loja de produtos de limpeza (não precisa se apresentar)*\n\n  histórico da conversa: ${JSON.stringify(this.messageHistory.get(message.from))}\n\n informações adicionais sobre produtos anteriores:${this.userProductInfoMap.get(message.from)}\n\n ***se o pruduto não estiver na lista a cima, responda que não trabalhamos com esse produto*** \n\nagora responda: ${message.body}`;
                 }
                 break;
 
             case 'pagamento':
                 // Seção para lidar com a categoria 'pagamento'
                 let paymentInfo = await this.getJsonInfoFromAPI('http://localhost:3000/pagamentos');
-                const keywordsPayment = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
-                const matchingPayments = this.searchByKeywords(JSON.parse(paymentInfo), keywordsPayment);
 
-                if (matchingPayments.length > 0) {
-                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
-                    const paymentInfoText = matchingPayments.map(payment => {
-                        // Formate cada objeto como uma string formatada
-                        return `Informações de pagamento:\n${this.formatObjectToString(payment)}`;
-                    }).join('\n\n');
+                if (paymentInfo.length > 0) {
 
-                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n informações:\n${paymentInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
+
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n informações:\n${paymentInfo}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
                     responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
@@ -265,68 +261,50 @@ class WhatsAppClient {
             case 'empresa':
                 // Seção para lidar com a categoria 'pagamento'
                 let empresaInfo = await this.getJsonInfoFromAPI('http://localhost:3000/empresa');
-                const keywordsEmpresa = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
-                const matchingEmpresa = this.searchByKeywords(JSON.parse(empresaInfo), keywordsEmpresa);
 
-                if (matchingEmpresa.length > 0) {
-                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
-                    const empresaInfoText = matchingEmpresa.map(empresa => {
-                        // Formate cada objeto como uma string formatada
-                        return `Informações de pagamento:\n${this.formatObjectToString(empresa)}`;
-                    }).join('\n\n');
 
-                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n informações:\n${empresaInfoText}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
+                if (empresaInfo.length > 0) {
+
+
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n informações:\n${empresaInfo}\n\n *utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
                     responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
+
             case 'saudacao':
                 // Seção para lidar com a categoria 'pagamento'
                 let saudacaoInfo = await this.getJsonInfoFromAPI('http://localhost:3000/saudacao');
-                responsePrompt = `finja que você trabalha na alquimia industria as informações abaixo são suas\n Informações: ${saudacaoInfo} \n*utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \nSe apresente e não dê respostas muito longas; \n\nMensagem: ${message.body};                    ; `;
+
+                responsePrompt = `finja que você trabalha na alquimia industria (loja de produtos de limpeza) as informações abaixo são suas\n Informações: ${saudacaoInfo} \n*utilize seus conhecimentos* quando não tiver informações fornecidas para responder, \nSe apresente e não dê respostas muito longas; \n\nMensagem: ${message.body};                    ; `;
                 break;
 
             case 'troca':
                 // Seção para lidar com a categoria 'troca'
                 let exchangeInfo = await this.getJsonInfoFromAPI('http://localhost:3000/troca');
-                const keywordsExchange = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
-                const matchingExchanges = this.searchByKeywords(JSON.parse(exchangeInfo), keywordsExchange);
 
-                if (matchingExchanges.length > 0) {
-                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
-                    const exchangeInfoText = matchingExchanges.map(exchange => {
-                        // Formate cada objeto como uma string formatada
-                        return `Informações de troca:\n${this.formatObjectToString(exchange)}`;
-                    }).join('\n\n');
+                if (exchangeInfo.length > 0) {
 
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${exchangeInfoText}\n\n dessa lista encontre qual se adequa mais com a pergunta e responda com base nas informações.\n\nMensagem: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Informações:\n${exchangeInfo}\n\n dessa lista encontre qual se adequa mais com a pergunta e responda com base nas informações.\n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
 
             case 'entrega':
                 // Seção para lidar com a categoria 'entrada'
                 let deliveryInfo = await this.getJsonInfoFromAPI('http://localhost:3000/entrega');
-                const keywordsDelivery = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
-                const matchingDeliveries = this.searchByKeywords(JSON.parse(deliveryInfo), keywordsDelivery);
 
-                if (matchingDeliveries.length > 0) {
-                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
-                    const deliveryInfoText = matchingDeliveries.map(delivery => {
-                        // Formate cada objeto como uma string formatada
-                        return `Informações de entrega:\n${this.formatObjectToString(delivery)}`;
-                    }).join('\n\n');
+                if (deliveryInfo.length > 0) {
 
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${deliveryInfoText}\n\nDessa lista, encontre qual se adequa mais com a pergunta e responda com base nas informações. *Utilize seus conhecimentos* quando não tiver informações fornecidas para responder.\n\nMensagem: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Informações:\n${deliveryInfo}\n\nDessa lista, encontre qual se adequa mais com a pergunta e responda com base nas informações. *Utilize seus conhecimentos* quando não tiver informações fornecidas para responder.\n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
-
 
             case 'promocao':
                 // Seção para lidar com a categoria 'troca'
@@ -336,15 +314,31 @@ class WhatsAppClient {
                 if (promocaoInfo.length > 0) {
                     // Se houver resultados da pesquisa, crie o prompt com as informações completas
 
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${promocaoInfo}\n\n com base nas informações acima, responda a mensagem abaixo: \n\nMensagem: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Informações:\n${promocaoInfo}\n\n com base nas informações acima, responda a mensagem abaixo: \n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
+
+            case 'pedido':
+                // Seção para lidar com a categoria 'troca'
+                let compraInfo = await this.getJsonInfoFromAPI('http://localhost:3000/pedido');
+
+
+                if (compraInfo.length > 0) {
+                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
+
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Informações:\n${compraInfo}\n\n com base nas informações acima, responda a mensagem abaixo direcionando o cliente para o setor de compras: \n\nMensagem: ${message.body}`;
+                } else {
+                    // Se não houver resultados da pesquisa, use um prompt padrão
+                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
+                }
+                break;
+
             default:
                 // Caso padrão: categoria não reconhecida, use o prompt padrão com a mensagem do cliente
-                responsePrompt = `Responda a mensagem abaixo\n\n
+                responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n\n Responda a mensagem abaixo\n\n
                 mensagem: ${message.body}`;
                 break;
         }
@@ -388,7 +382,7 @@ class WhatsAppClient {
 
 
     private async onMessage(message: Message) {
-        if (!message.fromMe) {
+        if (!message.fromMe && message.body.trim() !== '') {
             // Adiciona a mensagem ao histórico do cliente
             this.addToMessageHistory(message.from, message.body);
 
