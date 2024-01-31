@@ -1,3 +1,14 @@
-2024/01/26-03:15:42.233 2f30 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2024/01/26-03:15:42.234 2f30 Recovering log #21
-2024/01/26-03:15:42.234 2f30 Reusing old log C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/000021.log 
+2024/01/30-20:43:22.339 18c4 Reusing MANIFEST C:\Users\Bruno\Documents\BotWhatsAppIA\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2024/01/30-20:43:22.340 18c4 Recovering log #44
+2024/01/30-20:43:22.341 18c4 Level-0 table #46: started
+2024/01/30-20:43:22.373 18c4 Level-0 table #46: 13682 bytes OK
+2024/01/30-20:43:22.379 18c4 Delete type=0 #44
+2024/01/30-20:43:22.380 a9c Compacting 4@0 + 1@1 files
+2024/01/30-20:43:22.387 a9c Generated table #48@0: 109 keys, 7362 bytes
+2024/01/30-20:43:22.387 a9c Compacted 4@0 + 1@1 files => 7362 bytes
+2024/01/30-20:43:22.389 a9c compacted to: files[ 0 1 1 0 0 0 0 ]
+2024/01/30-20:43:22.390 a9c Delete type=2 #35
+2024/01/30-20:43:22.390 a9c Delete type=2 #38
+2024/01/30-20:43:22.390 a9c Delete type=2 #41
+2024/01/30-20:43:22.390 a9c Delete type=2 #43
+2024/01/30-20:43:22.390 a9c Delete type=2 #46
