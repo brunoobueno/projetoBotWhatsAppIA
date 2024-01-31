@@ -55,7 +55,7 @@ class GeminiModel extends AiModel<string> {
                     err
                 )
             );
-            msg.reply('An error occur please see console for more information.');
+            msg.reply('Infelizmente eu não posso falar sobre esse assunto, pois pela minha programação é intendida como ofensivo ou prejudicial');
         }
         
     }

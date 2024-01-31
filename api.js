@@ -101,6 +101,18 @@ app.get('/promocao', async (req, res) => {
   }
 });
 
+app.get('/entrega', async (req, res) => {
+  try {
+    // Consulta ao banco de dados para buscar informações da empresa
+    const [rows] = await pool.query('SELECT * FROM entrega');
+    res.status(200).json(rows); // Retorne os dados da promocao como JSON
+  } catch (error) {
+    console.error('Erro ao buscar produtos:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+
 app.listen(port, () => {
   console.log(`Servidor API rodando na porta ${port}`);
 });

@@ -2,7 +2,7 @@ import { Client, Message, LocalAuth, MessageId } from 'whatsapp-web.js';
 import QRCode from 'qrcode-terminal';
 import axios from 'axios';
 import dotenv from 'dotenv';
- 
+
 
 // config file
 import config from '../whatsapp-ai.config';
@@ -25,26 +25,55 @@ class WhatsAppClient {
     private client;
     private aiModels: Map<AiModels, AiModel<string>>;
 
-    // Propriedade de instância para armazenar as informações do último produto
-    private lastProductInfo: string = '';
+    // Propriedade de instância para armazenar as informações de produtos do usuário dinamicamente
+    private userProductInfoMap: Map<string, string> = new Map<string, string>();
 
     //função que armazena o histórico para cada cliente
     private messageHistory: Map<string, string[]> = new Map();
 
     private addToMessageHistory(phoneNumber: string, message: string) {
         // Obtém o histórico existente ou cria um novo array se não existir
-        const history = this.messageHistory.get(phoneNumber) || [];
-
+        let history = this.messageHistory.get(phoneNumber) || [];
+    
         // Adiciona a nova mensagem ao histórico
         history.push(message);
-
+    
         // Limita o histórico a no máximo 2 mensagens
         if (history.length > 2) {
-            history.shift(); // Remove a primeira mensagem se exceder o limite
+            history = history.slice(-2); // Mantém apenas as últimas duas mensagens
         }
-
+    
+        // Se o histórico estava vazio, adicione mensagens padrão
+        if (history.length === 1 && history[0] === message) {
+            history.unshift('oi', 'olá'); // Adiciona mensagens padrão no início do histórico
+        }
+    
         // Atualiza o histórico no mapa
         this.messageHistory.set(phoneNumber, history);
+    }
+
+    // Adicionando uma fila de execução para as mensagens
+    private messageQueue: Message[] = [];
+    private isProcessingQueue: boolean = false;
+    
+    // Função para enfileirar mensagens
+    private enqueueMessage(message: Message) {
+        this.messageQueue.push(message);
+        if (!this.isProcessingQueue) {
+            this.processMessageQueue();
+        }
+    }
+
+    // Função para processar a fila de mensagens
+    private async processMessageQueue() {
+        this.isProcessingQueue = true;
+
+        while (this.messageQueue.length > 0) {
+            const message = this.messageQueue.shift()!;
+            await this.classifyAndRespond(message);
+        }
+
+        this.isProcessingQueue = false;
     }
 
 
@@ -57,14 +86,14 @@ class WhatsAppClient {
         };
 
         // Lista de stop words (palavras que queremos excluir da pesquisa)
-        const stopWords = ['qual', 'para', 'tem', 'isso', 'isto', 'logo', 'cedo', 'tarde', 'cedinho', 'depois', 'antes', 'durante',
+        const stopWords = ['qual', 'quais', 'para', 'tem', 'isso', 'isto', 'logo', 'cedo', 'tarde', 'cedinho', 'depois', 'antes', 'durante',
             'enquanto', 'imediatamente', 'aqui', 'acola', 'nesta', 'naquela', 'nestas', 'naquelas', 'toda', 'todas',
             'todo', 'todos', 'muita', 'muitas', 'muito', 'muitos', 'alguma', 'algumas', 'algum', 'alguns', 'pouca', 'poucas',
             'pouco', 'poucos', 'certa', 'certas', 'certo', 'certos', 'outra', 'outras', 'outro', 'outros', 'mesma', 'mesmas',
             'mesmo', 'mesmos', 'vários', 'várias', 'varias', 'varios', 'quaisquer', 'nenhuma', 'nenhumas', 'nenhum', 'nenhuns',
             'outro', 'outra', 'outros', 'outras', 'tal', 'tais', 'uma', 'uns', 'umas', 'cada', 'algum', 'alguma', 'alguns',
             'algumas', 'certo', 'certa', 'certos', 'certas', 'ante', 'até', 'após', 'com', 'contra', 'de', 'desde', 'em', 'entre',
-            'para', 'perante', 'por', 'sem', 'sob', 'sobre', 'trás', 'produto']; // Adicione outras stop words conforme necessário
+            'para', 'perante', 'por', 'sem', 'sob', 'sobre', 'trás', 'produto', 'produtos']; // Adicione outras stop words conforme necessário
 
         // Pré-processamento das palavras-chave: minúsculas, remoção de caracteres especiais e remoção de stop words
         const processedKeywords = keywords
@@ -164,8 +193,8 @@ class WhatsAppClient {
         const prompt = `Analise a mensagem recebida e classifique-a da seguinte maneira:\n\n
     Se a mensagem estiver relacionada à 'informações de produtos', responda com 'produto'.\n
     Se a mensagem estiver relacionada a 'Informações sobre a empresa' responda com 'empresa'.\n
-    Se a mensagem estiver relacionada à 'troca de produtos ou defeitos', responda com 'troca'.\n
     Se a mensagem tratar de assuntos relacionados somente à 'pagamento' responda com 'pagamento'.\n
+    Se a mensagem tratar de assuntos relacionados somente à 'entrega e envio de produtos' responda com 'entrega'.\n
     Se a mensagem tratar sobre 'saudação inicial' responda com 'saudacao'.\n
     Se a mensagem tratar sobre 'promoções, cupons e descontos' responda com 'promocao'.\n
     se a mensagem estiver relacioanda à 'informações de troca/garantia/defeitos de produtos', responda com 'troca'.\n
@@ -203,12 +232,13 @@ class WhatsAppClient {
                         return `${this.formatObjectToString(product)}`;
                     }).join('\n\n');
 
-                    this.lastProductInfo = productInfoText;
+                    // Atualize userProductInfoMap associado ao número de telefone do usuário
+                    this.userProductInfoMap.set(message.from, productInfoText);
 
                     responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n  informações adicionais:\n${productInfoText}\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n **quando for informação de produto que não esteja acima, significa que não temos no estoque** \n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, \n\nagora responda: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
-                    responsePrompt = `*finja que você trabalha na alquimia industria (não precisa se apresentar)*\n  histórico da conversa: ${JSON.stringify(this.messageHistory.get(message.from))}\n informações adicionais:${this.lastProductInfo}\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n **quando for informação de produto que não esteja acima, significa que não temos no estoque**\n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, \n\nagora responda: ${message.body}`;
+                    responsePrompt = `*finja que você trabalha na alquimia industria, uma loja de produtos de limpeza (não precisa se apresentar)*\n\n  histórico da conversa: ${JSON.stringify(this.messageHistory.get(message.from))}\n\n informações adicionais sobre produtos anteriores:${this.userProductInfoMap.get(message.from)}\n\n ***se for mais de 1 produto, responda a pergunta para cada produto***\n\n **quando for informação de produto que não esteja acima, responda que não temos no estoque ou peça para especificar qual o produto desejado**\n\n *utilize seus próprios conhecimentos* quando não tiver informações fornecidas para responder, \n\nagora responda: ${message.body}`;
                 }
                 break;
 
@@ -270,12 +300,33 @@ class WhatsAppClient {
                         return `Informações de troca:\n${this.formatObjectToString(exchange)}`;
                     }).join('\n\n');
 
-                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${exchangeInfoText}\n\n dessa lista encontre qual se adequa mais com a pergunta e responda com base nas informações. *Utilize seus conhecimentos* quando não tiver informações fornecidas para responder.\n\nMensagem: ${message.body}`;
+                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${exchangeInfoText}\n\n dessa lista encontre qual se adequa mais com a pergunta e responda com base nas informações.\n\nMensagem: ${message.body}`;
                 } else {
                     // Se não houver resultados da pesquisa, use um prompt padrão
                     responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
                 }
                 break;
+
+            case 'entrega':
+                // Seção para lidar com a categoria 'entrada'
+                let deliveryInfo = await this.getJsonInfoFromAPI('http://localhost:3000/entrega');
+                const keywordsDelivery = message.body.toLowerCase().split(' '); // Divide a mensagem em palavras-chave
+                const matchingDeliveries = this.searchByKeywords(JSON.parse(deliveryInfo), keywordsDelivery);
+
+                if (matchingDeliveries.length > 0) {
+                    // Se houver resultados da pesquisa, crie o prompt com as informações completas
+                    const deliveryInfoText = matchingDeliveries.map(delivery => {
+                        // Formate cada objeto como uma string formatada
+                        return `Informações de entrega:\n${this.formatObjectToString(delivery)}`;
+                    }).join('\n\n');
+
+                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Informações:\n${deliveryInfoText}\n\nDessa lista, encontre qual se adequa mais com a pergunta e responda com base nas informações. *Utilize seus conhecimentos* quando não tiver informações fornecidas para responder.\n\nMensagem: ${message.body}`;
+                } else {
+                    // Se não houver resultados da pesquisa, use um prompt padrão
+                    responsePrompt = `*Fingindo que trabalha na Alquimia Indústria (não precisa se apresentar)*\n Responda a pergunta abaixo:\n\n${message.body}`;
+                }
+                break;
+
 
             case 'promocao':
                 // Seção para lidar com a categoria 'troca'
@@ -341,8 +392,8 @@ class WhatsAppClient {
             // Adiciona a mensagem ao histórico do cliente
             this.addToMessageHistory(message.from, message.body);
 
-            // Classifique e responda à mensagem apenas se for uma mensagem nova
-            await this.classifyAndRespond(message);
+            // envie a mensagem para a fila de espera
+            this.enqueueMessage(message);
         }
     }
 
@@ -350,7 +401,7 @@ class WhatsAppClient {
     private async onSelfMessage(message: Message) {
         if (!message.fromMe) return;
         if (message.hasQuotedMsg && !Util.getModelByPrefix(message.body)) return;
-        this.onMessage(message);
+        this.enqueueMessage(message);
     }
 
     public async sendMessage(msgStr: string, message: Message, modelName: string) {
